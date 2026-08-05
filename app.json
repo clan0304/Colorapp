@@ -1,23 +1,24 @@
 {
   "expo": {
-    "name": "colorapp",
+    "name": "Tonalisse",
     "slug": "colorapp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "colorapp",
+    "scheme": "tonalisse",
     "userInterfaceStyle": "automatic",
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.developermo.colorapp",
+      "supportsTablet": false,
+      "bundleIdentifier": "com.tonalisse.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
+      "package": "com.tonalisse.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"

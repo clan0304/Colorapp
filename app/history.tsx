@@ -1,12 +1,13 @@
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
+import { deleteJson } from '@/lib/api';
 import { SEASON_THEMES } from '@/lib/card/templates';
 import { SEASON_LABELS, type SeasonType } from '@/lib/diagnosis/types';
 import { useSupabase } from '@/lib/use-supabase';
 import { useAuth, useUser } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
 import * as React from 'react';
-import { ActivityIndicator, FlatList, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 // final_confidence is stored but deliberately not fetched: it was shown here as
@@ -23,10 +24,44 @@ type DiagnosisRow = {
 export default function HistoryScreen() {
   const router = useRouter();
   const { isLoaded, isSignedIn, user } = useUser();
-  const { signOut } = useAuth();
+  const { signOut, getToken } = useAuth();
   const supabase = useSupabase();
   const [rows, setRows] = React.useState<DiagnosisRow[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [deleting, setDeleting] = React.useState(false);
+
+  // App Store Review Guideline 5.1.1(v): an app that creates accounts must let
+  // you delete one from inside it. Signing out does not satisfy this, and it is
+  // checked during review. Two steps on purpose — the confirm spells out what
+  // goes, because this is not reversible.
+  function confirmDelete() {
+    Alert.alert(
+      'Delete your account?',
+      'Your saved results and your account are removed for good. This cannot be undone.\n\nYour photos are already gone — each one is deleted the moment its analysis finishes.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: runDelete },
+      ],
+    );
+  }
+
+  async function runDelete() {
+    setDeleting(true);
+    try {
+      await deleteJson('/api/account', { token: await getToken() });
+      // The Clerk user is gone, so this session is already void; signing out
+      // just clears it locally before we leave.
+      await signOut();
+      router.replace('/');
+    } catch (deleteError) {
+      Alert.alert(
+        'Could not delete your account',
+        deleteError instanceof Error ? deleteError.message : 'Please try again.',
+      );
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   React.useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
@@ -125,6 +160,17 @@ export default function HistoryScreen() {
             }}
           />
         )}
+
+        {/* Reachable without hunting for it — a deletion buried behind a web
+            form is what the guideline exists to prevent — but visually quiet, so
+            it is not a stray tap next to Sign Out. */}
+        <View className="mt-4 items-center border-t border-border pt-4">
+          <Button size="sm" variant="ghost" disabled={deleting} onPress={confirmDelete}>
+            <Text className="text-destructive">
+              {deleting ? 'Deleting…' : 'Delete my account'}
+            </Text>
+          </Button>
+        </View>
       </View>
     </SafeAreaView>
   );

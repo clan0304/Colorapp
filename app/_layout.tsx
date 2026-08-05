@@ -30,6 +30,12 @@ export default function RootLayout() {
             <Stack.Screen name="capture" options={{ title: 'Take a Photo', headerBackTitle: 'Back' }} />
             <Stack.Screen name="draping" options={{ title: 'Color Draping', headerBackVisible: false }} />
             <Stack.Screen name="result" options={{ title: 'Your Result', headerBackVisible: false }} />
+            {/* Full-bleed and headerless: this screen is designed to be screen
+                recorded, and a nav bar sitting in the frame ends up in the post.
+                It also has its own exit control, so the header's back button is
+                redundant. Without this entry the route falls back to the default
+                header, which silently eats the top of every clip. */}
+            <Stack.Screen name="clip" options={{ headerShown: false }} />
             <Stack.Screen name="sign-in" options={{ title: 'Sign In', presentation: 'modal' }} />
             <Stack.Screen name="history" options={{ title: 'My Results' }} />
           </Stack>

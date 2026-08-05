@@ -80,15 +80,20 @@ export default function ResultScreen() {
     if (!result) return;
     setRendering(true);
     try {
-      const { url } = await postJson<{ url: string }>('/api/card', {
-        season: result.final_season,
-        subtype: result.final_subtype,
-        band: confidenceBand(result),
-        undertone: result.llm.undertone,
-        depth: result.llm.depth,
-        chroma: result.llm.chroma,
-        format: 'story',
-      });
+      const { url } = await postJson<{ url: string }>(
+        '/api/card',
+        {
+          season: result.final_season,
+          subtype: result.final_subtype,
+          band: confidenceBand(result),
+          undertone: result.llm.undertone,
+          depth: result.llm.depth,
+          chroma: result.llm.chroma,
+          format: 'story',
+        },
+        // Creatomate bills per render, so this route is authenticated too.
+        { token: await getToken() },
+      );
       setCardUrl(url);
     } catch (error) {
       Alert.alert('Card failed', error instanceof Error ? error.message : 'Please try again.');

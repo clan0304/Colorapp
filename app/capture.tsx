@@ -6,11 +6,12 @@ import { postJson } from '@/lib/api';
 import type { Analysis } from '@/lib/diagnosis/types';
 import type { DiagnosisEnvelope } from '@/lib/server/envelope'; // type-only import
 import { useFlow } from '@/lib/flow-store';
+import { useAuth } from '@clerk/clerk-expo';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as FileSystem from 'expo-file-system/legacy';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { ImagesIcon, LightbulbIcon, SwitchCameraIcon } from 'lucide-react-native';
 import * as React from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native';
@@ -19,6 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function CaptureScreen() {
   const router = useRouter();
   const { setCapture } = useFlow();
+  const { getToken, isLoaded, isSignedIn } = useAuth();
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = React.useState<'front' | 'back'>('front');
   const [busy, setBusy] = React.useState(false);
@@ -51,6 +53,11 @@ export default function CaptureScreen() {
       });
       if (!prepared.base64) throw new Error('Could not read the photo.');
 
+      // Both routes below cost real money per call and are authenticated as of
+      // 2026-08-05. Fetched once and reused so a slow token call cannot land
+      // between the upload and the analyse that depends on it.
+      const token = await getToken();
+
       // Preferred path: upload straight to R2, analyze by key (photo is deleted
       // server-side right after analysis). Falls back to inline base64 when R2
       // isn't configured or the upload fails.
@@ -59,6 +66,7 @@ export default function CaptureScreen() {
         const { key, uploadUrl } = await postJson<{ key: string; uploadUrl: string }>(
           '/api/upload',
           {},
+          { token },
         );
         const upload = await FileSystem.uploadAsync(uploadUrl, prepared.uri, {
           httpMethod: 'PUT',
@@ -71,11 +79,12 @@ export default function CaptureScreen() {
 
       type AnalyzeResponse = { analysis: Analysis; envelope: DiagnosisEnvelope };
       const { analysis, envelope } = r2Key
-        ? await postJson<AnalyzeResponse>('/api/analyze', { r2Key })
-        : await postJson<AnalyzeResponse>('/api/analyze', {
-            image: prepared.base64,
-            mediaType: 'image/jpeg',
-          });
+        ? await postJson<AnalyzeResponse>('/api/analyze', { r2Key }, { token })
+        : await postJson<AnalyzeResponse>(
+            '/api/analyze',
+            { image: prepared.base64, mediaType: 'image/jpeg' },
+            { token },
+          );
 
       const note = analysis.image_quality.notes.trim();
       if (!analysis.image_quality.face_visible) {
@@ -129,6 +138,12 @@ export default function CaptureScreen() {
     const uri = picked.assets?.[0]?.uri;
     if (!picked.canceled && uri) await analyze(uri);
   }
+
+  // Server-side auth is the real gate; this only stops a signed-out user from
+  // being walked all the way to a shutter that can only fail. Deep links and
+  // back navigation reach this screen without passing the home screen's check.
+  if (!isLoaded) return <View className="flex-1 bg-background" />;
+  if (!isSignedIn) return <Redirect href="/sign-in" />;
 
   if (!permission) return <View className="flex-1 bg-background" />;
 

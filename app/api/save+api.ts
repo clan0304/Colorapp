@@ -1,4 +1,4 @@
-import { verifyToken } from '@clerk/backend';
+import { requireUserId } from '@/lib/server/auth';
 import { combine } from '@/lib/diagnosis/combine';
 import { getDrapeRounds, PALETTE_VERSION } from '@/lib/diagnosis/palette';
 import { AnalysisSchema, type DrapePick } from '@/lib/diagnosis/types';
@@ -52,31 +52,11 @@ function validatePicks(raw: unknown): RawPick[] {
   });
 }
 
-async function resolveUserId(request: Request): Promise<string> {
-  const header = request.headers.get('authorization') ?? '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-  if (!token) {
-    throw new AppError('auth', 'Sign in to save your result.');
-  }
-  const secretKey = process.env.CLERK_SECRET_KEY;
-  if (!secretKey) {
-    throw new AppError('internal', 'Authentication is not configured.');
-  }
-  try {
-    const payload = await verifyToken(token, { secretKey });
-    if (!payload.sub) throw new Error('token has no sub');
-    return payload.sub;
-  } catch (error) {
-    if (error instanceof AppError) throw error;
-    throw new AppError('auth', 'Your session has expired. Please sign in again.');
-  }
-}
-
 export const POST = withErrorHandler('/api/save', async (request, ctx: RequestContext) => {
   const body = await parseJsonBody(request);
 
   // 1. Authenticated users only (guest rows come from future async flows).
-  const userId = await resolveUserId(request);
+  const userId = await requireUserId(request, 'save your result');
   ctx.userId = userId;
 
   // 2. Validate + verify the analysis against the signed envelope.

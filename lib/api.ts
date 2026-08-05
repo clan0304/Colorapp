@@ -31,18 +31,20 @@ export class ApiError extends Error {
   }
 }
 
-export async function postJson<T>(
+async function sendJson<T>(
+  method: 'POST' | 'DELETE',
   path: string,
   body: unknown,
   options?: { token?: string | null },
 ): Promise<T> {
   const response = await fetch(apiUrl(path), {
-    method: 'POST',
+    method,
     headers: {
       'Content-Type': 'application/json',
       ...(options?.token ? { Authorization: `Bearer ${options.token}` } : {}),
     },
-    body: JSON.stringify(body),
+    // DELETE carries no body here; some servers reject one on DELETE outright.
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   const json = await response.json().catch(() => null);
   if (!response.ok) {
@@ -52,4 +54,16 @@ export async function postJson<T>(
     throw new Error(`Request failed (${response.status})`);
   }
   return json as T;
+}
+
+export function postJson<T>(
+  path: string,
+  body: unknown,
+  options?: { token?: string | null },
+): Promise<T> {
+  return sendJson<T>('POST', path, body, options);
+}
+
+export function deleteJson<T>(path: string, options?: { token?: string | null }): Promise<T> {
+  return sendJson<T>('DELETE', path, undefined, options);
 }

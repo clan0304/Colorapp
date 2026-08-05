@@ -2,11 +2,17 @@ import { getCreatomateApiKey, renderToUrl } from '@/lib/card/render';
 import { buildCardSource, type CardFormat, type CardInput } from '@/lib/card/templates';
 import { BAND_LABELS, CONFIDENCE_BANDS, type ConfidenceBand } from '@/lib/diagnosis/combine';
 import { SEASON_TYPES, type SeasonType } from '@/lib/diagnosis/types';
-import { AppError, parseJsonBody, withErrorHandler } from '@/lib/server/errors';
+import { enforceRateLimit, RATE_LIMITS, requireUserId } from '@/lib/server/auth';
+import { AppError, parseJsonBody, withErrorHandler, type RequestContext } from '@/lib/server/errors';
 
 const FORMATS: CardFormat[] = ['story', 'square'];
 
-export const POST = withErrorHandler('/api/card', async (request) => {
+export const POST = withErrorHandler('/api/card', async (request, ctx: RequestContext) => {
+  // Creatomate bills per render, so this is a metered route like analyse.
+  const userId = await requireUserId(request, 'create a share card');
+  ctx.userId = userId;
+  enforceRateLimit(`card:${userId}`, RATE_LIMITS.card);
+
   const body = await parseJsonBody(request);
 
   const season = body.season as SeasonType;

@@ -116,6 +116,14 @@ export const TEMPERATURE_DRAPES: Record<Temperature, ColorRec[]> = {
 export type RunSwatch = ColorRec & { temperature: Temperature; suits: boolean };
 
 /**
+ * A swatch in the undiagnosed run. Same shape as RunSwatch minus `suits`: with
+ * no diagnosis there is nothing to judge against, and the absence of the field
+ * — rather than a `false` — is what stops the clip screen from rendering a
+ * verdict it has not earned.
+ */
+export type NeutralSwatch = ColorRec & { temperature: Temperature };
+
+/**
  * The colour run for a season: the opposite temperature first, then the user's
  * own.
  *
@@ -132,6 +140,28 @@ export function temperatureRun(season: SeasonType): RunSwatch[] {
       temperature,
       suits: temperature === mine,
     })),
+  );
+}
+
+/**
+ * The colour run for someone who has not been diagnosed yet — the free entry
+ * point from the home screen.
+ *
+ * It shows the same two blocks as temperatureRun() but names no winner, and
+ * that is the point of it rather than a limitation. Seeing the contrast without
+ * being able to name it is exactly the question the analysis answers, so a free
+ * run that gave away the answer would remove the reason to go on to it. The
+ * screen closes on the question instead of looping.
+ *
+ * Order is fixed at warm then cool for everyone, so every clip made from the
+ * home screen has the same shape and the format stays recognisable. That does
+ * hand the cool block a recency advantage in the viewer's own judgement; it is
+ * accepted, because this run is a hook and never a measurement. Do not "fix" it
+ * by randomising the order — a run that differs per user is not a format.
+ */
+export function neutralRun(): NeutralSwatch[] {
+  return (['warm', 'cool'] as const).flatMap((temperature) =>
+    TEMPERATURE_DRAPES[temperature].map((color) => ({ ...color, temperature })),
   );
 }
 

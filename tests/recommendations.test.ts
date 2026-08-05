@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { SEASON_THEMES } from '../lib/card/templates';
 import {
   getJewelryRec,
+  neutralRun,
   SEASON_RECOMMENDATIONS,
   SEASON_TEMPERATURE,
   TEMPERATURE_DRAPES,
@@ -86,6 +87,37 @@ test('suits is true for exactly the half matching the season temperature', () =>
     for (const swatch of suiting) {
       assert.equal(swatch.temperature, SEASON_TEMPERATURE[season]);
     }
+  }
+});
+
+test('the neutral run shows both families in a fixed order and names no winner', () => {
+  const run = neutralRun();
+  const half = TEMPERATURE_DRAPES.warm.length;
+  assert.equal(run.length, half * 2);
+  for (const [i, swatch] of run.entries()) {
+    // Fixed warm-then-cool for every user: the free run has no season to close
+    // on, and a stable order is what makes it a recognisable format.
+    assert.equal(
+      swatch.temperature,
+      i < half ? 'warm' : 'cool',
+      'the neutral run is warm block then cool block',
+    );
+    // Load-bearing absence: the clip screen keys the tick/cross off `suits`
+    // existing, so a stray field here would stamp a verdict on a run that has
+    // not earned one.
+    assert.ok(!('suits' in swatch), 'the neutral run must not judge');
+    assert.match(swatch.hex, HEX, `bad hex ${swatch.hex} (${swatch.name})`);
+    assert.ok(!/[가-힣]/.test(swatch.name), 'no Korean in service strings');
+  }
+});
+
+test('both runs draw the same colours, so the free one is not a lesser preview', () => {
+  const neutral = [...neutralRun()].map((swatch) => swatch.hex).sort();
+  for (const season of SEASON_TYPES) {
+    const personalised = temperatureRun(season)
+      .map((swatch) => swatch.hex)
+      .sort();
+    assert.deepEqual(neutral, personalised, `${season}: both runs come from TEMPERATURE_DRAPES`);
   }
 });
 

@@ -1,7 +1,7 @@
 import { SEASON_LABELS, type ColorRec, type SeasonType } from '../diagnosis/types';
 
 /** Placeholder app name — the one string every shareable is stamped with. */
-export const BRAND_NAME = 'PersonalColor';
+export const BRAND_NAME = 'Tonalisse';
 
 export type CardFormat = 'story' | 'square';
 

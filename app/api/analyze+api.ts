@@ -2,9 +2,11 @@ import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { SYSTEM_PROMPT, USER_PROMPT } from '@/lib/diagnosis/prompt';
 import { AnalysisSchema, type Analysis } from '@/lib/diagnosis/types';
+import { enforceRateLimit, RATE_LIMITS, requireUserId } from '@/lib/server/auth';
 import { signEnvelope } from '@/lib/server/envelope';
 import { AppError, parseJsonBody, withErrorHandler, type RequestContext } from '@/lib/server/errors';
 import { deletePhoto, getPhotoBase64, getR2Config, R2_KEY_PATTERN } from '@/lib/server/r2';
+import { getServiceClient } from '@/lib/server/supabase';
 
 /** Analysis + signed envelope; the envelope is returned untouched at save time. */
 function analysisResponse(analysis: Analysis): Response {
@@ -57,6 +59,13 @@ async function runAnalysis(image: string, mediaType: MediaType, model: string): 
 }
 
 export const POST = withErrorHandler('/api/analyze', async (request, ctx: RequestContext) => {
+  // The most expensive route in the app — one vision call per request, in real
+  // money. It was anonymous until 2026-08-05, which meant anyone holding the URL
+  // could spend the Claude budget. Auth first, before any work is done.
+  const userId = await requireUserId(request, 'analyse a photo');
+  ctx.userId = userId;
+  enforceRateLimit(`analyze:${userId}`, RATE_LIMITS.analyze);
+
   const body = await parseJsonBody(request);
 
   const model = (body.model ?? DEFAULT_MODEL) as (typeof ALLOWED_MODELS)[number];
@@ -75,6 +84,22 @@ export const POST = withErrorHandler('/api/analyze', async (request, ctx: Reques
     }
     const config = getR2Config();
     if (!config) throw new AppError('internal', 'Photo storage is not configured.');
+
+    // A well-formed key is not proof of ownership. Without this, anyone holding
+    // a key could have another user's photo read and then deleted — /api/upload
+    // records the owner precisely so this check has something to check against.
+    const owns = await getServiceClient().rpc('owns_photo_key', {
+      p_user_id: userId,
+      p_r2_key: body.r2Key,
+    });
+    if (owns.error) {
+      throw new Error(`owns_photo_key RPC failed: ${owns.error.message}`); // → safe internal error
+    }
+    if (owns.data !== true) {
+      // not_found rather than forbidden: a caller probing keys learns nothing
+      // about whether one exists.
+      throw new AppError('not_found', 'Uploaded photo not found. Please upload it again.');
+    }
 
     const image = await getPhotoBase64(config, body.r2Key);
     if (image === null) {
